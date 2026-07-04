@@ -58,13 +58,15 @@ Apply this to every `${{ }}` that appears inside a `run: |` block — including 
 
 **`excessive-permissions`** — a job (or the whole workflow) has no explicit `permissions:` block, so it inherits the repository's default token permissions, which are broader than the job needs. Fix: add a `permissions:` block to every job scoped to the minimum needed, e.g. `contents: read` for a job that only checks out code and calls external (non-GitHub) APIs.
 
-**`artipacked`** — an `actions/checkout` step doesn't set `persist-credentials: false`. By default, checkout persists the job's Git credentials in the local git config, which can leak if that state is later uploaded as an artifact. Fix: add
+**`artipacked`** — an `actions/checkout` step doesn't set `persist-credentials: false`. By default, checkout persists the job's Git credentials in the local git config, which can leak if that state is later uploaded as an artifact.
+
+**Preferred fix (repo policy): disable the rule in zizmor's own config** rather than editing every checkout step — see section 4. Only fall back to the per-step `persist-credentials: false` edit if the user explicitly asks for the inline fix instead of a rule suppression:
 ```yaml
 - uses: actions/checkout@v7
   with:
     persist-credentials: false
 ```
-**Exception:** if the job genuinely needs those persisted credentials later (e.g. it runs `git push` using the checkout-provided credential helper, as a release-tagging job typically does), leave that one checkout as-is rather than breaking the push — don't blanket-apply the fix without checking whether the job pushes to git afterward.
+**Exception (if doing the inline fix):** if the job genuinely needs those persisted credentials later (e.g. it runs `git push` using the checkout-provided credential helper, as a release-tagging job typically does), leave that one checkout as-is rather than breaking the push — don't blanket-apply the fix without checking whether the job pushes to git afterward.
 
 **`unpinned-uses`** — a `uses:` reference is pinned to a tag (`@v4`) rather than a commit SHA. Whether to fix this by pinning to a SHA or to suppress the rule is a project-level policy call (see the rule-suppression section below) — SHA-pinning trades convenience for supply-chain safety, and interacts with Dependabot config (see the `dependabot-maintenance` skill: SHA-pinned actions should NOT have their update-types ignored, since every bump is meaningful there).
 
