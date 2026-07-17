@@ -1,14 +1,20 @@
 ---
 name: zizmor
 description: Set up zizmor GitHub Actions security scanning in a repository using one of two approaches (default or strict), and investigate/fix zizmor findings from GitHub code-scanning alerts or the zizmor CLI. Use this skill when asked to add zizmor to a repo, harden or security-review Actions workflows, fix a code-scanning alert produced by zizmor, or tune which zizmor rules run/are suppressed.
-argument-hint: "[strict]"
+argument-hint: "[strict|fix]"
 ---
 
 ## Instructions
 
-### 1. Pick the approach
+Pick a mode from the argument:
 
-Use the **default** approach unless the user passes `strict` (or explicitly asks for strict/SHA-pinning):
+- no argument, or `default` — set up zizmor scanning with the **default** approach (see "Setup").
+- `strict` — set up zizmor scanning with the **strict** approach (see "Setup").
+- `fix` — investigate and fix an existing zizmor finding rather than installing/changing the workflow (see "Fix a finding").
+
+## Setup
+
+### 1. Pick the approach
 
 - **default** — actions stay pinned to major-version tags (`@v7`); the `artipacked` and `unpinned-uses` rules are disabled via zizmor's inline config, so no per-step edits are needed for them.
 - **strict** — every rule stays enabled. Every `uses:` reference is pinned to a full commit SHA (with the tag kept as a trailing comment), and every `actions/checkout` step sets `persist-credentials: false`.
@@ -80,7 +86,7 @@ The SHAs above are the known-good pins for `actions/checkout@v7.0.0` and `its-me
 
 Go through each file in `.github/workflows/` and edit every action to match the selected approach:
 
-**default** — leave tag-pinned `uses:` references and checkout steps as they are (`artipacked` and `unpinned-uses` are suppressed by the config). Still fix `template-injection` and `excessive-permissions` findings (section 5) — those are never suppressed.
+**default** — leave tag-pinned `uses:` references and checkout steps as they are (`artipacked` and `unpinned-uses` are suppressed by the config). Still fix `template-injection` and `excessive-permissions` findings (see "Fix a finding") — those are never suppressed.
 
 **strict** — for every `uses:` reference pinned to a tag, swap the tag for the commit hash it currently resolves to, keeping the tag as a comment:
 
@@ -103,7 +109,7 @@ Prefer resolving the most specific release tag (e.g. `v4.4.0` rather than the fl
     persist-credentials: false
 ```
 
-**Exception:** if a job genuinely needs the persisted credentials later (e.g. it runs `git push` using the checkout-provided credential helper, as a release-tagging job typically does), leave that one checkout as-is and scope an `ignore` for it in the config (section 6) rather than breaking the push.
+**Exception:** if a job genuinely needs the persisted credentials later (e.g. it runs `git push` using the checkout-provided credential helper, as a release-tagging job typically does), leave that one checkout as-is and scope an `ignore` for it in the config (see "Tuning the rule config") rather than breaking the push.
 
 ### 4. Verify locally
 
@@ -137,39 +143,7 @@ After editing, confirm the count is zero for that rule/file:
 zizmor --format json .github/workflows/<file>.yaml 2>/dev/null | jq -r '[.[] | select(.ident=="<rule-id>")] | length'
 ```
 
-### 5. Fixing individual findings
-
-Given a code-scanning alert URL like `https://github.com/<owner>/<repo>/security/code-scanning/<N>`, fetch the exact finding before guessing at a fix:
-
-```bash
-gh api repos/<owner>/<repo>/code-scanning/alerts/<N>
-```
-
-This returns the rule id (`rule.id`, e.g. `zizmor/template-injection`), severity, and the exact `most_recent_instance.location` (`path`, `start_line`, `end_line`). Always read the flagged file at that location before editing — don't pattern-match from memory. A single alert is often just one high-confidence instance of a broader pattern that also shows up at lower severity elsewhere; when asked to fix an alert "across all workflows," search for every instance of the underlying pattern.
-
-**`template-injection`** — a `${{ ... }}` expression is interpolated directly into a `run:` shell script body. Even values that "should" be safe (job outputs, `needs.*.outputs.*`, `steps.*.outputs.*`, `secrets.*`) are flagged because the raw string is spliced into the script before bash parses it. Fix: move every such expression into the step's `env:` block and reference it as a shell variable:
-
-```yaml
-# Before
-- run: |
-    tag="${{ inputs.tag }}"
-
-# After
-- env:
-    INPUT_TAG: ${{ inputs.tag }}
-  run: |
-    tag="$INPUT_TAG"
-```
-
-`with:`/`env:` values are not shell-interpreted and are fine as-is.
-
-**`excessive-permissions`** — a job (or the whole workflow) has no explicit `permissions:` block, so it inherits the repository's default token permissions. Fix: add a `permissions:` block scoped to the minimum needed, e.g. `contents: read` for a job that only checks out code.
-
-**`artipacked`** — an `actions/checkout` step doesn't set `persist-credentials: false`. Fix depends on the approach: under **default** the rule is already disabled via config; under **strict** add `persist-credentials: false` per step (section 3, including the git-push exception).
-
-**`unpinned-uses`** — a `uses:` reference is pinned to a tag rather than a commit SHA. Under **default** the rule is disabled via config; under **strict** swap the tag for the hash (section 3). SHA-pinning interacts with Dependabot config — see the `dependabot-maintenance` skill: SHA-pinned actions should NOT have their update-types ignored, since every bump is meaningful there.
-
-### 6. Tuning the rule config
+### Tuning the rule config
 
 Rules are disabled/scoped via the action's inline `config:` input:
 
@@ -203,6 +177,40 @@ Rules are disabled/scoped via the action's inline `config:` input:
   ```
   Look for the finding count changing and an `(N ignored)`/`(N suppressed)` note in the summary line before applying the same config to the real workflow file.
 
+## Fix a finding
+
+Given a code-scanning alert URL like `https://github.com/<owner>/<repo>/security/code-scanning/<N>`, fetch the exact finding before guessing at a fix:
+
+```bash
+gh api repos/<owner>/<repo>/code-scanning/alerts/<N>
+```
+
+This returns the rule id (`rule.id`, e.g. `zizmor/template-injection`), severity, and the exact `most_recent_instance.location` (`path`, `start_line`, `end_line`). Always read the flagged file at that location before editing — don't pattern-match from memory. A single alert is often just one high-confidence instance of a broader pattern that also shows up at lower severity elsewhere; when asked to fix an alert "across all workflows," search for every instance of the underlying pattern.
+
+**`template-injection`** — a `${{ ... }}` expression is interpolated directly into a `run:` shell script body. Even values that "should" be safe (job outputs, `needs.*.outputs.*`, `steps.*.outputs.*`, `secrets.*`) are flagged because the raw string is spliced into the script before bash parses it. Fix: move every such expression into the step's `env:` block and reference it as a shell variable:
+
+```yaml
+# Before
+- run: |
+    tag="${{ inputs.tag }}"
+
+# After
+- env:
+    INPUT_TAG: ${{ inputs.tag }}
+  run: |
+    tag="$INPUT_TAG"
+```
+
+`with:`/`env:` values are not shell-interpreted and are fine as-is.
+
+**`excessive-permissions`** — a job (or the whole workflow) has no explicit `permissions:` block, so it inherits the repository's default token permissions. Fix: add a `permissions:` block scoped to the minimum needed, e.g. `contents: read` for a job that only checks out code.
+
+**`artipacked`** — an `actions/checkout` step doesn't set `persist-credentials: false`. Fix depends on the approach the repo's zizmor workflow uses: under **default** the rule is already disabled via config, so prefer disabling it (see "Tuning the rule config") over inline edits; under **strict** add `persist-credentials: false` per step (see "Setup" step 3, including the git-push exception).
+
+**`unpinned-uses`** — a `uses:` reference is pinned to a tag rather than a commit SHA. Under **default** the rule is disabled via config; under **strict** swap the tag for the hash (see "Setup" step 3). SHA-pinning interacts with Dependabot config — see the `dependabot-maintenance` skill: SHA-pinned actions should NOT have their update-types ignored, since every bump is meaningful there.
+
+After editing, verify locally (see "Setup" step 4) that the finding count for that rule/file drops to zero.
+
 ## Examples
 
 - **User:** "/zizmor" (in a repo without scanning)
@@ -211,5 +219,5 @@ Rules are disabled/scoped via the action's inline `config:` input:
 - **User:** "/zizmor strict"
 - **Agent:** Writes the strict template, resolves every tag-pinned `uses:` across all workflows to a commit SHA with a `# vX.Y.Z` comment, adds `persist-credentials: false` to every checkout (scoping an `ignore` for any job that must push with persisted credentials), verifies with plain `zizmor`.
 
-- **User:** "fix the alert at github.com/org/repo/security/code-scanning/55 across all workflows"
+- **User:** "/zizmor fix github.com/org/repo/security/code-scanning/55" (fix that alert across all workflows)
 - **Agent:** Fetches alert 55 via `gh api`, identifies it as `template-injection` on one file/line, greps for the same pattern in every workflow file, applies the `env:` indirection fix to all of them, verifies with `zizmor --format json`, then reports back before committing.
