@@ -12,6 +12,8 @@ Pick a mode from the argument:
 - `strict` — set up zizmor scanning with the **strict** approach (see "Setup").
 - `fix` — investigate and fix an existing zizmor finding rather than installing/changing the workflow (see "Fix a finding").
 
+Setup (`default`/`strict`) only installs/reconfigures the zizmor workflow and brings existing `uses:` pinning in line with the chosen approach — it does not fix other findings like `template-injection` or `excessive-permissions`. Only fix findings when the user explicitly runs this skill with the `fix` argument.
+
 ## Setup
 
 ### 1. Pick the approach
@@ -86,7 +88,7 @@ The SHAs above are the known-good pins for `actions/checkout@v7.0.0` and `its-me
 
 Go through each file in `.github/workflows/` and edit every action to match the selected approach:
 
-**default** — leave tag-pinned `uses:` references and checkout steps as they are (`artipacked` and `unpinned-uses` are suppressed by the config). Still fix `template-injection` and `excessive-permissions` findings (see "Fix a finding") — those are never suppressed.
+**default** — leave tag-pinned `uses:` references and checkout steps as they are (`artipacked` and `unpinned-uses` are suppressed by the config). Do not fix `template-injection` or `excessive-permissions` findings here — leave those for a separate `/zizmor fix` run (see "Fix a finding").
 
 **strict** — for every `uses:` reference pinned to a tag, swap the tag for the commit hash it currently resolves to, keeping the tag as a comment:
 
@@ -214,7 +216,7 @@ After editing, verify locally (see "Setup" step 4) that the finding count for th
 ## Examples
 
 - **User:** "/zizmor" (in a repo without scanning)
-- **Agent:** Writes `.github/workflows/zizmor.yaml` from the default template, leaves tag-pinned actions in other workflows alone, fixes any `template-injection`/`excessive-permissions` findings, verifies with `zizmor --config /tmp/zizmor-default.yml`.
+- **Agent:** Writes `.github/workflows/zizmor.yaml` from the default template, leaves tag-pinned actions in other workflows alone, verifies with `zizmor --config /tmp/zizmor-default.yml`. Any `template-injection`/`excessive-permissions` findings it turns up are left for a follow-up `/zizmor fix` run, not fixed inline.
 
 - **User:** "/zizmor strict"
 - **Agent:** Writes the strict template, resolves every tag-pinned `uses:` across all workflows to a commit SHA with a `# vX.Y.Z` comment, adds `persist-credentials: false` to every checkout (scoping an `ignore` for any job that must push with persisted credentials), verifies with plain `zizmor`.
