@@ -19,6 +19,12 @@ description: Configure and maintain Dependabot for GitHub Actions workflows, esp
          interval: weekly
    ```
 
+   **Verify the blank line is actually there before moving on** — it's easy to drop when editing an existing file instead of writing fresh:
+   ```bash
+   grep -A1 '^version:' .github/dependabot.yaml
+   ```
+   The second line of output must be empty. If it isn't, edit the file to insert it — do not proceed to later steps with this missing.
+
 3. **Add a cooldown period** so new releases aren't proposed the moment they're published (gives time for a bad release to surface before you'd pull it in):
 
    ```yaml
