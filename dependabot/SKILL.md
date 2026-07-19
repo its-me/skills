@@ -1,5 +1,5 @@
 ---
-name: dependabot-maintenance
+name: dependabot
 description: Configure and maintain Dependabot for GitHub Actions workflows, especially in repos that pin actions to major-version tags (e.g. @v4, @v7). Use this skill when asked to set up Dependabot, add a cooldown period, reduce Dependabot PR noise, or when Dependabot keeps opening PRs to bump an action's minor/patch version even though the workflow already tracks the major tag.
 ---
 

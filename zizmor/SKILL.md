@@ -209,7 +209,7 @@ This returns the rule id (`rule.id`, e.g. `zizmor/template-injection`), severity
 
 **`artipacked`** — an `actions/checkout` step doesn't set `persist-credentials: false`. Fix depends on the approach the repo's zizmor workflow uses: under **default** the rule is already disabled via config, so prefer disabling it (see "Tuning the rule config") over inline edits; under **strict** add `persist-credentials: false` per step (see "Setup" step 3, including the git-push exception).
 
-**`unpinned-uses`** — a `uses:` reference is pinned to a tag rather than a commit SHA. Under **default** the rule is disabled via config; under **strict** swap the tag for the hash (see "Setup" step 3). SHA-pinning interacts with Dependabot config — see the `dependabot-maintenance` skill: SHA-pinned actions should NOT have their update-types ignored, since every bump is meaningful there.
+**`unpinned-uses`** — a `uses:` reference is pinned to a tag rather than a commit SHA. Under **default** the rule is disabled via config; under **strict** swap the tag for the hash (see "Setup" step 3). SHA-pinning interacts with Dependabot config — see the `dependabot` skill: SHA-pinned actions should NOT have their update-types ignored, since every bump is meaningful there.
 
 After editing, verify locally (see "Setup" step 4) that the finding count for that rule/file drops to zero.
 
