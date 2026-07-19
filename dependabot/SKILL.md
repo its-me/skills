@@ -11,6 +11,7 @@ description: Configure and maintain Dependabot for GitHub Actions workflows, esp
 
    ```yaml
    version: 2
+
    updates:
      - package-ecosystem: github-actions
        directory: /
@@ -56,5 +57,5 @@ description: Configure and maintain Dependabot for GitHub Actions workflows, esp
 
 ## Notes
 
-- If a workflow pins actions to a commit SHA instead of a tag (common when a stricter security posture is wanted, e.g. via `unpinned-uses` in a zizmor policy — see the `zizmor-workflow-security` skill), the "redundant bump" reasoning does NOT apply: every version bump is meaningful there, since there's no floating tag doing the update for you. Don't add the `ignore` rule in that case.
+- If a workflow pins actions to a commit SHA instead of a tag (common when a stricter security posture is wanted, e.g. via `unpinned-uses` in a zizmor policy — see the `zizmor` skill), the "redundant bump" reasoning does NOT apply: every version bump is meaningful there, since there's no floating tag doing the update for you. Don't add the `ignore` rule in that case.
 - Do not disable Dependabot entirely or set an excessively long cooldown "to reduce noise" — the `ignore` rule targets the actual redundancy without losing visibility into major version bumps or other ecosystems (npm, pip, etc.) that don't have this floating-tag property.
