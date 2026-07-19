@@ -1,9 +1,18 @@
 ---
 name: dependabot
-description: Configure and maintain Dependabot for GitHub Actions workflows, especially in repos that pin actions to major-version tags (e.g. @v4, @v7). Use this skill when asked to set up Dependabot, add a cooldown period, reduce Dependabot PR noise, or when Dependabot keeps opening PRs to bump an action's minor/patch version even though the workflow already tracks the major tag.
+description: Configure and maintain Dependabot for GitHub Actions workflows, especially in repos that pin actions to major-version tags (e.g. @v4, @v7). Use this skill when asked to set up Dependabot, add a cooldown period, reduce Dependabot PR noise, merge or close open Dependabot PRs, or when Dependabot keeps opening PRs to bump an action's minor/patch version even though the workflow already tracks the major tag.
+argument-hint: "[config|merge]"
 ---
 
 ## Instructions
+
+Pick a mode from the argument:
+
+- no argument — run the full workflow: edit the config (see "Configure") and then reconcile open PRs (see "Merge or close PRs").
+- `config` — only edit `.github/dependabot.yaml`; do not touch open PRs.
+- `merge` — only review and merge/close open Dependabot PRs; do not edit the config file.
+
+## Configure
 
 1. **Locate or create the config file** at `.github/dependabot.yaml` (or `.yml`) in the repository root.
 
@@ -52,14 +61,28 @@ description: Configure and maintain Dependabot for GitHub Actions workflows, esp
 
    This leaves major-version bumps (e.g. `v4` → `v5`) as the only PRs Dependabot opens — the ones that can actually contain breaking changes and deserve a human look.
 
-6. **After pushing the config change, close any now-redundant open PRs.** Dependabot typically auto-closes PRs that fall under a newly-added `ignore` rule on its next run, but verify:
+## Merge or close PRs
+
+1. **List open Dependabot PRs:**
    ```bash
-   gh pr list --repo <owner>/<repo> --state open
+   gh pr list --repo <owner>/<repo> --state open --search "author:app/dependabot"
    ```
-   If any remain open and clearly match the ignored update type, close them manually:
+
+2. **Close now-redundant PRs first.** If `.github/dependabot.yaml` has an `ignore` rule (from "Configure" or already in place), any open PR matching that update type will never be mergeable as-is — Dependabot typically auto-closes these on its next run, but don't wait on that:
    ```bash
    gh pr close <number> --repo <owner>/<repo> --comment "<reason>"
    ```
+
+3. **Check CI before merging anything — never merge blind:**
+   ```bash
+   gh pr checks <number> --repo <owner>/<repo>
+   ```
+   - If it's a major-version bump (any ecosystem — these can contain breaking changes): leave it open and report it regardless of CI status. That's exactly the kind of PR this skill's `ignore` rule is designed to preserve for a human look — don't auto-merge it.
+   - If it's a minor/patch bump on something that isn't redundant (e.g. an npm/pip dependency, or a github-actions entry with no `ignore` rule covering it) and checks pass: merge it.
+     ```bash
+     gh pr merge <number> --repo <owner>/<repo> --squash
+     ```
+   - If checks fail: leave it open and report why, regardless of bump type.
 
 ## Notes
 
