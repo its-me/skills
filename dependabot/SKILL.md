@@ -7,7 +7,7 @@ description: Configure and maintain Dependabot for GitHub Actions workflows, esp
 
 1. **Locate or create the config file** at `.github/dependabot.yaml` (or `.yml`) in the repository root.
 
-2. **Baseline config** for a `github-actions` ecosystem entry:
+2. **Baseline config** for a `github-actions` ecosystem entry. Always keep the blank line between `version:` and `updates:` — it's a stylistic convention, not a YAML requirement, but follow it anyway:
 
    ```yaml
    version: 2
