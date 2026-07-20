@@ -23,7 +23,17 @@ Setup (`default`/`strict`) only installs/reconfigures the zizmor workflow and br
 
 ### 2. Install the zizmor workflow
 
-Write `.github/workflows/zizmor.yaml` from the template matching the approach.
+Before writing the workflow, always resolve the latest release of `actions/checkout` and `its-me/action.zizmor` — never assume the pins shown in the templates below are still current, they're just illustrative as of when this skill was written:
+
+```bash
+gh api repos/actions/checkout/releases/latest --jq .tag_name
+gh api repos/its-me/action.zizmor/releases/latest --jq .tag_name
+```
+
+Write `.github/workflows/zizmor.yaml` from the template matching the approach, substituting the resolved versions:
+
+- **default** — use the latest release's major-version component as the floating tag (e.g. if the latest release is `v7.2.0`, pin `@v7`; if it's `v8.0.0`, pin `@v8`).
+- **strict** — use the full latest release tag, resolved to its commit SHA (see below), not the SHA shown in the template.
 
 **default:**
 
@@ -79,31 +89,49 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
-      - uses: its-me/action.zizmor@52c918723b0bd2be8f1d275ad85b4a0b7ee91e03 # v1.0.0
+      - uses: its-me/action.zizmor@ff06ae628ae4304e6d711c1c61c761b9d097c96e # v1.0.1
 ```
 
-The SHAs above are the known-good pins for `actions/checkout@v7.0.0` and `its-me/action.zizmor@v1.0.0`; reuse them as-is unless the user asks for a newer release.
-
-### 3. Bring every other workflow in line with the approach
-
-Go through each file in `.github/workflows/` and edit every action to match the selected approach:
-
-**default** — leave tag-pinned `uses:` references and checkout steps as they are (`artipacked` and `unpinned-uses` are suppressed by the config). Do not fix `template-injection` or `excessive-permissions` findings here — leave those for a separate `/zizmor fix` run (see "Fix a finding").
-
-**strict** — for every `uses:` reference pinned to a tag, swap the tag for the commit hash it currently resolves to, keeping the tag as a comment:
+The SHAs above are only an example of the pin format (resolved as of this skill's authoring) — always re-resolve against the latest release rather than reusing them:
 
 ```bash
 gh api repos/<owner>/<repo>/commits/<tag> --jq .sha
 ```
 
+### 3. Bring every other workflow in line with the approach
+
+Go through each file in `.github/workflows/` and edit every action to match the selected approach. In both approaches, always update every action to its latest available release — never leave a stale version in place just because it already works.
+
+**default** — for every `uses:` reference, resolve the latest release and re-pin to its major-version tag, bumping the major version if a newer one exists:
+
+```bash
+gh api repos/<owner>/<repo>/releases/latest --jq .tag_name
+```
+
 ```yaml
 # Before
+- uses: actions/setup-node@v3
+# After (latest release is v4.4.0)
 - uses: actions/setup-node@v4
-# After
+```
+
+`artipacked` and `unpinned-uses` findings are already suppressed by the config, so nothing further is needed for those. Do not fix `template-injection` or `excessive-permissions` findings here — leave those for a separate `/zizmor fix` run (see "Fix a finding").
+
+**strict** — for every `uses:` reference, resolve the latest release tag first, then convert that tag to its commit hash, keeping the tag as a comment (don't just re-hash whatever tag happens to already be pinned):
+
+```bash
+gh api repos/<owner>/<repo>/releases/latest --jq .tag_name
+gh api repos/<owner>/<repo>/commits/<tag> --jq .sha
+```
+
+```yaml
+# Before
+- uses: actions/setup-node@v3
+# After (latest release is v4.4.0)
 - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v4.4.0
 ```
 
-Prefer resolving the most specific release tag (e.g. `v4.4.0` rather than the floating `v4`) so the comment stays truthful; `gh api repos/<owner>/<repo>/releases/latest --jq .tag_name` finds it. Also add `persist-credentials: false` to every `actions/checkout` step:
+Also add `persist-credentials: false` to every `actions/checkout` step:
 
 ```yaml
 - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -216,10 +244,10 @@ After editing, verify locally (see "Setup" step 4) that the finding count for th
 ## Examples
 
 - **User:** "/zizmor" (in a repo without scanning)
-- **Agent:** Writes `.github/workflows/zizmor.yaml` from the default template, leaves tag-pinned actions in other workflows alone, verifies with `zizmor --config /tmp/zizmor-default.yml`. Any `template-injection`/`excessive-permissions` findings it turns up are left for a follow-up `/zizmor fix` run, not fixed inline.
+- **Agent:** Writes `.github/workflows/zizmor.yaml` from the default template using the latest release of `actions/checkout` and `its-me/action.zizmor`, bumps every tag-pinned `uses:` in other workflows to its latest major-version tag, verifies with `zizmor --config /tmp/zizmor-default.yml`. Any `template-injection`/`excessive-permissions` findings it turns up are left for a follow-up `/zizmor fix` run, not fixed inline.
 
 - **User:** "/zizmor strict"
-- **Agent:** Writes the strict template, resolves every tag-pinned `uses:` across all workflows to a commit SHA with a `# vX.Y.Z` comment, adds `persist-credentials: false` to every checkout (scoping an `ignore` for any job that must push with persisted credentials), verifies with plain `zizmor`.
+- **Agent:** Writes the strict template using the latest release of each action resolved to a commit SHA, resolves every tag-pinned `uses:` across all workflows to its latest release, converted to a commit SHA with a `# vX.Y.Z` comment, adds `persist-credentials: false` to every checkout (scoping an `ignore` for any job that must push with persisted credentials), verifies with plain `zizmor`.
 
 - **User:** "/zizmor fix github.com/org/repo/security/code-scanning/55" (fix that alert across all workflows)
 - **Agent:** Fetches alert 55 via `gh api`, identifies it as `template-injection` on one file/line, greps for the same pattern in every workflow file, applies the `env:` indirection fix to all of them, verifies with `zizmor --format json`, then reports back before committing.
